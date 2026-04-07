@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_PASSWORD=Vermelho@0010203040
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=ecommerce_development
+    volumes:
+      - postgres_data:/var/lib/postgresql/data 
+    ports:
+      - "5432:5432"
+
+  web:
+    build:
+      # Aponta para a pasta do Rails
+      context: ./ECOMMERCE-BACKEND-RUBY-RAILS-ANGULAR-TAILWIND-SASS 
+    environment:
+      - DATABASE_URL=postgres://postgres:Vermelho%400010203040@db:5432/ecommerce_development
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./ECOMMERCE-BACKEND-RUBY-RAILS-ANGULAR-TAILWIND-SASS:/app
+      - /app/tmp 
+    command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p 3000"
+
+  frontend:
+    build:
+      # Aponta para a pasta do Angular
+      context: ./ECOMMERCE-FRONTEND-ANGULAR-TAILWIND-SASS-NODEJS
+    ports:
+      - "4200:4200"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./ECOMMERCE-FRONTEND-ANGULAR-TAILWIND-SASS-NODEJS:/app
+      - /app/node_modules 
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:

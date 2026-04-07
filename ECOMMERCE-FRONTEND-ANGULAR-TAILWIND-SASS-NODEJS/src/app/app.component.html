@@ -1,0 +1,17 @@
+<div class="container-menu">
+  <app-header></app-header>
+
+  <mat-toolbar color="primary">
+
+  </mat-toolbar>
+
+  <main>
+    <router-outlet></router-outlet>
+  
+  </main>
+  <app-cookie-banner></app-cookie-banner>
+  <app-footer></app-footer>
+  
+  <!-- aqui você chama o painel -->
+<app-cookie-panel *ngIf="mostrarPainel"></app-cookie-panel>
+</div>

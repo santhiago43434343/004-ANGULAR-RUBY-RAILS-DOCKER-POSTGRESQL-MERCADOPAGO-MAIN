@@ -1,0 +1,43 @@
+# PostgreSQL. Versions 9.3 and up are supported.
+#
+# Install the pg driver:
+#   gem install pg
+# On macOS with Homebrew:
+#   gem install pg -- --with-pg-config=/opt/homebrew/bin/pg_config
+# On Windows:
+#   gem install pg
+#       Choose the win32 build.
+#       Install PostgreSQL and put its /bin directory on your path.
+#
+# Configure Using Gemfile
+# gem "pg"
+#
+
+# config/database.yml
+
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  # VITAL para o Docker: aponta para o nome do serviço no docker-compose
+  host: <%= ENV.fetch("DATABASE_HOST") { "db" } %>
+  port: 5432
+  username: postgres
+  password: Vermelho@0010203040
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  timeout: 5000
+
+development:
+  <<: *default
+  database: ecommerce_development
+
+# O banco de teste também precisa do host 'db' para rodar as migrations no Docker
+test:
+  <<: *default
+  database: ecommerce_test
+
+production:
+  <<: *default
+  database: ecommerce_production
+  # Em produção, as credenciais geralmente vêm de variáveis de ambiente por segurança
+  username: <%= ENV["DATABASE_USERNAME"] || "postgres" %>
+  password: <%= ENV["DATABASE_PASSWORD"] %>

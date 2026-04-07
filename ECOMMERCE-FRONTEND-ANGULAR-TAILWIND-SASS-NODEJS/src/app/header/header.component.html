@@ -1,0 +1,87 @@
+<!-- HEADER -->
+<header class="main-header">
+  <h2 class="text-6xl font-bold">
+    <a routerLink="/" class="no-underline hover:opacity-80 transition">
+      <span class="text-blue-600">Proway</span>
+      <span class="text-orange-500">Computers</span>
+    </a>
+  </h2>
+
+  <div class="container-menu">
+    <nav class="main-header__menu">
+      <ul>
+        <!-- Botão Produtos -->
+        <li>
+          <a routerLink="/produtos">
+            <i class="fa-solid fa-list"></i>
+            Produtos
+          </a>
+        </li>
+
+        <!-- Botão Servidores -->
+        <li>
+          <a routerLink="/servidores">
+            <i class="fa-solid fa-server"></i>
+            Servidores
+          </a>
+        </li>
+
+        <!-- Botão Carrinho -->
+        <li>
+          <a routerLink="/carrinho">
+            <i class="fa-solid fa-cart-shopping"></i>
+            Carrinho
+            <span class="badge-carrinho">
+              {{ carrinhoService.obterCarrinho().length }}
+            </span>
+          </a>
+        </li>
+
+        <!-- Botão Contato -->
+        <li>
+          <a routerLink="/contato">
+            <i class="fa-solid fa-envelope"></i>
+            Contato
+          </a>
+        </li>
+
+     <!--Meus pedidos-->
+        <li>
+           <a routerLink="/meus-pedidos" class="hover:text-blue-500 transition-colors">
+           <i class="fa-solid fa-box-open"></i>
+    Meus Pedidos
+         </a>
+       <li>
+    <!-- Redes sociais -->
+        <li>
+          <a href="https://www.facebook.com" target="_blank">
+            <i class="fa-brands fa-facebook-f"></i>
+          </a>
+        </li>
+        <li>
+          <a href="https://www.instagram.com" target="_blank">
+            <i class="fa-brands fa-square-instagram"></i>
+          </a>
+        </li>
+        <li>
+          <a href="https://www.linkedin.com" target="_blank">
+            <i class="fa-brands fa-linkedin"></i>
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+
+  <!-- Formulário de busca -->
+  <form class="search-form" (submit)="buscar($event)">
+    <input
+      type="text"
+      [(ngModel)]="termoBusca"
+      name="busca"
+      placeholder="Buscar produtos..."
+    />
+    <button type="submit">
+      <i class="fa-solid fa-search"></i>
+    </button>
+  </form>
+</header>

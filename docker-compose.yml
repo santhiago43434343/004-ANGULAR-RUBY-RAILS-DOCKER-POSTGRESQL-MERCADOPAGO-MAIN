@@ -18,8 +18,10 @@ services:
     env_file:
       - .env
     environment:
-      # Aqui usamos as variáveis para montar a URL de conexão dinamicamente
-      - DATABASE_URL=postgres://${DB_USERNAME}:${DB_PASSWORD}@db:5432/ecommerce_development
+      # Passamos as variáveis separadas para evitar erro de parsing na URL com '@'
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DATABASE_HOST=db
       - MP_ACCESS_TOKEN=${MP_ACCESS_TOKEN}
     depends_on:
       - db
@@ -28,6 +30,7 @@ services:
     volumes:
       - ./ECOMMERCE-BACKEND-RUBY-RAILS-ANGULAR-TAILWIND-SASS/backend:/app
       - /app/tmp 
+    # O comando limpa o PID do servidor para evitar erro de "server already running"
     command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p 3000"
 
   frontend:

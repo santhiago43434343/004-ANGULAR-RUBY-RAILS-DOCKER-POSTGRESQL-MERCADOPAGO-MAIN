@@ -5,61 +5,24 @@ module Api
     class CheckoutsController < ApplicationController
       skip_before_action :verify_authenticity_token
 
-      # GET: Listar pedidos (Lupa/Dashboard)
+      # Listar todos os pedidos
       def index
         @pedidos = Order.all.order(created_at: :desc)
         render json: @pedidos
       end
 
-      # POST: Criar Pedido (Checkout)
+      # Criar um novo pedido (Início do Checkout)
       def create
         @pedido = Order.new(checkout_params)
         @pedido.user_id = 1 if @pedido.user_id.nil?
         @pedido.status ||= 'pendente'
 
         if @pedido.save
-          if @pedido.payment == 'mercadopago'
-            # 🚀 DICA: Se for usar produção, troque o Token aqui!
-            token = 'TEST-2302064569526159-040400-44b5d234ad539f67f9f02efe8faa6252-2381059062' 
-            sdk = Mercadopago::SDK.new(token)
-
-            preference_data = {
-              "items" => [
-                {
-                  "title" => "Pedido ##{@pedido.id} - ProwayComputers",
-                  "unit_price" => @pedido.total.to_f,
-                  "quantity" => 1,
-                  "currency_id" => "BRL"
-                }
-              ],
-              "payer" => {
-                "email" => @pedido.emailCliente.presence || "test_user_123@testuser.com"
-              }
-            }
-
-            preference_response = sdk.preference.create(preference_data)
-            url_mp = preference_response[:response]['init_point']
-
-            if url_mp
-              @pedido.update_columns(url_pagamento: url_mp)
-              render json: { 
-                id: @pedido.id, 
-                url_pagamento: url_mp, 
-                status: @pedido.status,
-                rastreio: "PW-#{SecureRandom.hex(4).upcase}" 
-              }, status: :created
-            else
-              render json: { error: "Erro MP", details: preference_response[:response] }, status: :bad_request
-            end
-
-          elsif @pedido.payment == 'pix'
-            # 🚀 RETORNO PARA O PIX
-            render json: { 
-              id: @pedido.id, 
-              status: @pedido.status,
-              pix_copia_e_cola: "00020126360014BR.GOV.BCB.PIX0114+5511999999999520400005303986540510.005802BR5915ProwayComputers6009SAO PAULO62070503***6304E2CA",
-              rastreio: "PW-#{SecureRandom.hex(4).upcase}"
-            }, status: :created
+          case @pedido.payment
+          when 'mercadopago'
+            configurar_mercado_pago
+          when 'pix'
+            gerar_pix_estatico
           else
             render json: @pedido, status: :created
           end
@@ -68,12 +31,59 @@ module Api
         end
       end
 
-      # PUT: Atualizar Status (O Lápis)
+      # --- WEBHOOK MERCADO PAGO ---
+      def webhook
+        payment_id = params.dig(:data, :id) || params[:id]
+        
+        if payment_id && (params[:type] == 'payment' || params[:action].to_s.include?('payment'))
+          token = ENV['MP_ACCESS_TOKEN'] || 'TEST-2302064569526159-040400-44b5d234ad539f67f9f02efe8faa6252-2381059062'
+          sdk = Mercadopago::SDK.new(token)
+          payment_info = sdk.payment.get(payment_id)
+          
+          if payment_info[:response]
+            status_real = payment_info[:response]['status']
+            pedido_id = payment_info[:response]['external_reference']
+            @pedido = Order.find_by(id: pedido_id)
+
+            if @pedido && status_real == 'approved' && @pedido.status != 'pago'
+              @pedido.update(status: 'pago')
+              PedidoMailer.confirmacao_pagamento(@pedido).deliver_later
+              puts "📧 E-mail de confirmação enviado (Mercado Pago) para #{@pedido.emailCliente}"
+            end
+          end
+        end
+        head :ok 
+      end
+
+      # --- WEBHOOK PAYPAL ---
+      def paypal_webhook
+        evento = params[:event_type]
+        recurso = params[:resource]
+
+        if evento == "PAYMENT.CAPTURE.COMPLETED" || evento == "PAYMENTS.PAYMENT.CREATED"
+          pedido_id = recurso[:custom_id] || recurso[:invoice_number]
+          @pedido = Order.find_by(id: pedido_id)
+
+          if @pedido && @pedido.status != 'pago'
+            @pedido.update(status: 'pago')
+            PedidoMailer.confirmacao_pagamento(@pedido).deliver_later
+            puts "📧 E-mail de confirmação enviado (PayPal) para #{@pedido.emailCliente}"
+          end
+        end
+        head :ok 
+      end
+
+      # Atualizar status do pedido manualmente (Chamado pelo Angular)
       def update
         @pedido = Order.find_by(id: params[:id])
         if @pedido
           novo_status = params.dig(:checkout, :status) || params[:status]
+          
           if @pedido.update(status: novo_status)
+            if novo_status == 'pago'
+              PedidoMailer.confirmacao_pagamento(@pedido).deliver_later
+              puts "📧 E-mail disparado manualmente via Update para #{@pedido.emailCliente}"
+            end
             render json: { message: "Status atualizado!", pedido: @pedido }, status: :ok
           else
             render json: { error: "Erro ao salvar" }, status: :unprocessable_entity
@@ -83,7 +93,7 @@ module Api
         end
       end
 
-      # DELETE: Excluir Pedido (A Lixeira)
+      # Remover pedido
       def destroy
         @pedido = Order.find_by(id: params[:id])
         if @pedido
@@ -98,6 +108,40 @@ module Api
 
       def checkout_params
         params.require(:checkout).permit(:total, :user_id, :status, :emailCliente, :address, :cart, :delivery, :payment, :url_pagamento)
+      end
+
+      def configurar_mercado_pago
+        token = ENV['MP_ACCESS_TOKEN'] || 'TEST-2302064569526159-040400-44b5d234ad539f67f9f02efe8faa6252-2381059062'
+        sdk = Mercadopago::SDK.new(token)
+
+        preference_data = {
+          "items" => [{
+            "title" => "Pedido ##{@pedido.id} - ProwayComputers",
+            "unit_price" => @pedido.total.to_f,
+            "quantity" => 1,
+            "currency_id" => "BRL"
+          }],
+          "external_reference" => @pedido.id.to_s,
+          "notification_url" => "https://combinative-rita-nonconspiratorial.ngrok-free.dev/api/v1/checkouts/webhook"
+        }
+
+        response = sdk.preference.create(preference_data)
+        url_mp = response[:response]['init_point']
+
+        if url_mp
+          @pedido.update_columns(url_pagamento: url_mp)
+          render json: { id: @pedido.id, url_pagamento: url_mp, status: @pedido.status }, status: :created
+        else
+          render json: { error: "Erro ao gerar link MP" }, status: :bad_request
+        end
+      end
+
+      def gerar_pix_estatico
+        render json: { 
+          id: @pedido.id, 
+          status: @pedido.status, 
+          pix_copia_e_cola: "00020126360014BR.GOV.BCB.PIX..." 
+        }, status: :created
       end
     end
   end
